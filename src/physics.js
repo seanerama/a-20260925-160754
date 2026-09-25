@@ -7,6 +7,7 @@
 // DOWN (canvas-native). Time is in seconds.
 
 import { add, scale } from './vec2.js';
+import { planetForce } from './launchers.js';
 
 /** The ONE timestep the game loop and tests use, in seconds. */
 export const FIXED_DT = 1 / 120;
@@ -67,14 +68,11 @@ export function createBody(partial = {}) {
  */
 export function step(world, dt) {
   const bodies = world.bodies.map((body) => {
-    // force = gravity * mass, plus a per-planet contribution.
-    // Seam for stage 4: iterate world.planets and sum planetForce(planet,
-    // body) from src/launchers.js here. Until stage 4 lands, planets
-    // contribute zero force.
+    // force = gravity * mass, plus the summed radial pull of every planet
+    // (contracts/world-model.md §"Planet force"; stage 4).
     let force = scale(world.gravity, body.mass);
     for (const planet of world.planets) {
-      const planetForce = { x: 0, y: 0 }; // TODO(stage 4): planetForce(planet, body)
-      force = add(force, planetForce);
+      force = add(force, planetForce(planet, body));
     }
 
     const vel = add(body.vel, scale(force, dt / body.mass));
