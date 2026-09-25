@@ -1,0 +1,3 @@
+timestamp,run_id,repo,roles,tokens_in,tokens_out,est_usd,wall_secs,outcome,tool_calls,role,gate,provider,model
+2026-09-25T18:06:51.628Z,run-20260925T160813Z-glme7a,seanerama/a-20260925-160754,plan,1863289,42854,1.892,408,success,53,plan,,claude,claude-opus-5-5
+2026-09-25T18:06:51.628Z,run-20260925T160813Z-glme7a,seanerama/a-20260925-160754,build,465640,3507,0.5198,972,success,16,build,,claude,claude-sonnet-5
