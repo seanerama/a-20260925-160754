@@ -1,0 +1,78 @@
+name: CI
+# Benchmark A — Verity hygiene gate (stack-agnostic).
+# Secret-scan + a structure check, no faked pass. Project gates (lint/test/…)
+# live in ONE committed place — .verity/gates.json — executed by the `gates`
+# job below AND by the Verity local gate runner (stage 82, ADR-0029 §4), so CI
+# can never drift from the gates that were green locally. Until the Architect
+# defines that file (when the stack and walking skeleton land — the
+# progressive gate, framework-spec §3), the gates job FAILS with instructions:
+# a repo with no committed gates must never read green (ADR-0028).
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read # gitleaks lists PR commits via the API on pull_request
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # Verity single-source gates (stage 82, ADR-0029 §4): this job executes the
+  # SAME committed `.verity/gates.json` the local gate runner executes —
+  # ordered, named commands judged by EXIT CODE only (ADR-0028: never through
+  # a pipe, never parsed output). No definition ⇒ the runner FAILS LOUDLY with
+  # instructions — a repo whose gates are missing must never read green (the
+  # issue-#203 defect class, closed by construction). Define your gates in
+  # .verity/gates.json as the stack lands; the runner script is committed at
+  # .verity/run-gates.cjs by the scaffold.
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the committed gate definition (.verity/gates.json)
+        run: node .verity/run-gates.cjs
+  structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required files present
+        run: |
+          for f in README.md LICENSE; do
+            test -f "$f" || { echo "missing required file: $f"; exit 1; }
+          done
+          echo "structure ok"
+      # Bytecode and tool caches must never be tracked, whatever .gitignore
+      # says (issue #178: a first PR committed __pycache__/*.pyc and CI stayed
+      # green). A fixed deny-list, NOT a mirror of .gitignore: a project may
+      # track dist/ or build/ on purpose. `git ls-files -z` gives raw paths
+      # (unquoted, even with spaces, tabs or non-ASCII names); `tr` turns the
+      # NULs into newlines so plain POSIX `grep -E` can read them. That can
+      # only ADD line boundaries, and every pattern is anchored to the end of a
+      # path or a `/`-bounded directory name, so nothing is missed. Judged by
+      # exit code (ADR-0028): grep 0 = offending paths (printed, fail),
+      # 1 = clean, anything else = the scan itself failed (fail closed).
+      - name: Tracked build artifacts absent
+        run: |
+          tracked=$(mktemp)
+          git ls-files -z > "$tracked" || { echo "git ls-files failed"; exit 1; }
+          rc=0
+          bad=$(tr '\0' '\n' < "$tracked" | grep -E '(^|/)(__pycache__|\.pytest_cache|node_modules)/|\.(pyc|pyo|class)$|(^|/)\.DS_Store$|\.egg-info/') || rc=$?
+          rm -f "$tracked"
+          if [ "$rc" -eq 0 ]; then
+            echo "tracked build artifacts (git rm --cached them and add them to .gitignore):"
+            printf '%s\n' "$bad"
+            exit 1
+          fi
+          [ "$rc" -eq 1 ] || { echo "tracked-artifact scan failed (grep exit $rc)"; exit 1; }
+          echo "structure ok"
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

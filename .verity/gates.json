@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "gates": [
+    {
+      "name": "test",
+      "command": "ls test/*.test.js >/dev/null && node --test test/*.test.js"
+    }
+  ]
+}

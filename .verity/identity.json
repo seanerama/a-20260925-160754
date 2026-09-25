@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "name": "Benchmark A",
+  "slug": "a-20260925-160754",
+  "owner": "seanerama",
+  "image_prefix": "ghcr.io/seanerama/a-20260925-160754",
+  "locked_at": "2026-09-25T16:07:54.278Z"
+}
