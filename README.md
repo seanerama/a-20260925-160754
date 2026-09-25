@@ -12,3 +12,21 @@ See [`STATUS.md`](STATUS.md) for live runtime state (deployed version, environme
 
 - **slug:** `a-20260925-160754`
 - **images:** `ghcr.io/seanerama/a-20260925-160754`
+
+## Play
+
+This is a zero-build static app — no bundler, no install step.
+
+```sh
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000/` in a browser.
+
+## Test
+
+```sh
+npm test
+```
+
+Runs the `node:test` suite (`node --test test/*.test.js`).
