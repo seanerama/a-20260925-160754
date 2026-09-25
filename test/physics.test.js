@@ -138,16 +138,86 @@ test('step() with zero bodies/planets is a no-op that still returns a new world'
   assert.notEqual(result, world);
 });
 
-test('planet seam: world.planets contribute zero force in this stage', () => {
+// --- stage 4: planet radial gravity wired into step() -------------------
+
+test('planet pull: a body at rest 200 units right of a planet moves toward it (x decreases), zero uniform gravity', () => {
+  const planet = { pos: { x: 480, y: 270 }, radius: 40, mass: 1000 };
+  const body = createBody({ pos: { x: 680, y: 270 }, vel: { x: 0, y: 0 } });
+  const world = createWorld({ gravity: { x: 0, y: 0 }, bodies: [body], planets: [planet] });
+
+  const result = runSteps(world, 30);
+  const b = result.bodies[0];
+
+  assert.ok(b.pos.x < 680, `expected x to decrease toward the planet, got ${b.pos.x}`);
+  assert.ok(b.vel.x < 0, `expected leftward velocity toward the planet, got ${b.vel.x}`);
+  // No off-axis drift: body starts exactly horizontal from the planet.
+  assertCloseNum(b.pos.y, 270, 1e-9, 'pos.y');
+  assertCloseNum(b.vel.y, 0, 1e-9, 'vel.y');
+});
+
+test('planet pull: acceleration under a planet is independent of body mass (zero uniform gravity)', () => {
+  const planet = { pos: { x: 480, y: 270 }, radius: 40, mass: 1000 };
+  const light = createBody({ pos: { x: 680, y: 270 }, vel: { x: 0, y: 0 }, mass: 0.5 });
+  const heavy = createBody({ pos: { x: 680, y: 270 }, vel: { x: 0, y: 0 }, mass: 50 });
+  const world = createWorld({ gravity: { x: 0, y: 0 }, bodies: [light, heavy], planets: [planet] });
+
+  const result = runSteps(world, 30);
+  const [lightAfter, heavyAfter] = result.bodies;
+
+  assertCloseNum(lightAfter.pos.x, heavyAfter.pos.x, 1e-9, 'pos.x should match regardless of mass');
+  assertCloseNum(lightAfter.vel.x, heavyAfter.vel.x, 1e-9, 'vel.x should match regardless of mass');
+});
+
+test('slingshot: a body flying past a planet ends with a deflected heading vs. the same run with no planet', () => {
+  const planet = { pos: { x: 480, y: 270 }, radius: 40, mass: 1000 };
+  const makeBody = () => createBody({ pos: { x: 0, y: 420 }, vel: { x: 400, y: 0 } });
+
+  const withPlanet = createWorld({ gravity: { x: 0, y: 0 }, bodies: [makeBody()], planets: [planet] });
+  const withoutPlanet = createWorld({ gravity: { x: 0, y: 0 }, bodies: [makeBody()] });
+
+  const resultWith = runSteps(withPlanet, 240);
+  const resultWithout = runSteps(withoutPlanet, 240);
+
+  const bWith = resultWith.bodies[0];
+  const bWithout = resultWithout.bodies[0];
+
+  // Without the planet, a straight shot with no gravity keeps heading 0.
+  assertCloseNum(bWithout.vel.y, 0, 1e-9, 'no-planet vel.y should stay 0');
+
+  const headingWith = Math.atan2(bWith.vel.y, bWith.vel.x);
+  const headingWithout = Math.atan2(bWithout.vel.y, bWithout.vel.x);
+
+  assert.notEqual(headingWith, headingWithout, 'heading should be deflected by the planet');
+  // The pull is toward the planet, which sits above the flight path (smaller
+  // y), so the deflection bends velocity upward (negative y).
+  assert.ok(bWith.vel.y < bWithout.vel.y, 'velocity should deflect toward the planet (upward, -y)');
+});
+
+test('determinism: two independent runs with a planet present are deep-equal', () => {
+  const makeWorld = () =>
+    createWorld({
+      gravity: { x: 0, y: 500 },
+      bodies: [
+        createBody({ pos: { x: 10, y: 20 }, vel: { x: 30, y: -5 }, mass: 2 }),
+        createBody({ pos: { x: 700, y: 400 }, vel: { x: -50, y: 0 }, mass: 0.5 }),
+      ],
+      planets: [{ pos: { x: 480, y: 270 }, radius: 40, mass: 1000 }],
+    });
+
+  const resultA = runSteps(makeWorld(), 500);
+  const resultB = runSteps(makeWorld(), 500);
+
+  assert.deepEqual(resultA, resultB);
+});
+
+test('regression: a planet-free world behaves exactly as in stage 2 (empty planets array is a no-op)', () => {
   const body = createBody({ pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 } });
-  const planets = [{ pos: { x: 500, y: 500 }, radius: 40, mass: 1000 }];
+  const world = createWorld({ gravity: { x: 0, y: 500 }, bodies: [body], planets: [] });
 
-  const withPlanet = createWorld({ gravity: { x: 0, y: 500 }, bodies: [body], planets });
-  const withoutPlanet = createWorld({ gravity: { x: 0, y: 500 }, bodies: [createBody({ pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 } })] });
+  const result = runSteps(world, 120);
+  const b = result.bodies[0];
 
-  const resultWith = runSteps(withPlanet, 60);
-  const resultWithout = runSteps(withoutPlanet, 60);
-
-  assert.deepEqual(resultWith.bodies[0].pos, resultWithout.bodies[0].pos);
-  assert.deepEqual(resultWith.bodies[0].vel, resultWithout.bodies[0].vel);
+  assertCloseNum(b.vel.y, 500 * FIXED_DT * 120, 1e-9, 'vel.y');
+  assertCloseNum(b.pos.x, 0);
+  assertCloseNum(b.vel.x, 0);
 });
